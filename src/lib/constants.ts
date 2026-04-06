@@ -1,5 +1,5 @@
-export const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
-export const MAX_FILE_SIZE_LABEL = "500 MB";
+export const MAX_FILE_SIZE = 250 * 1024 * 1024; // 250 MB
+export const MAX_FILE_SIZE_LABEL = "250 MB";
 
 export const SLUG_MIN_LENGTH = 3;
 export const SLUG_MAX_LENGTH = 64;

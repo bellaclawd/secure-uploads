@@ -62,10 +62,15 @@ export default function RootLayout({
             </div>
           </header>
           <main className="flex-1">{children}</main>
-          <footer className="border-t border-border py-6 text-center text-sm text-muted-foreground">
-            <div className="mx-auto max-w-3xl px-4">
-              Files are automatically deleted after expiration or first
-              download.
+          <footer className="border-t border-border py-8 text-sm text-muted-foreground">
+            <div className="mx-auto max-w-3xl px-4 space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p>&copy; {new Date().getFullYear()} SecureUploads.ca</p>
+                <p>Files are automatically deleted after expiration or first download.</p>
+              </div>
+              <p className="text-center text-xs text-muted-foreground/60">
+                Secure file sharing made in Canada. No tracking, no accounts, no hassle.
+              </p>
             </div>
           </footer>
         </ThemeProvider>

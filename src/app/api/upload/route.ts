@@ -1,15 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { insertFile, slugExists } from "@/lib/db";
-import { saveFile } from "@/lib/storage";
+import { insertFile, slugExists, getCleanableFiles, hardDeleteFile } from "@/lib/db";
+import { saveFile, deleteFile } from "@/lib/storage";
 import { validateSlug, generateSlug } from "@/lib/slugs";
 import { MAX_FILE_SIZE, MAX_FILE_SIZE_LABEL } from "@/lib/constants";
 import { v4 as uuidv4 } from "uuid";
+import bcrypt from "bcryptjs";
+
+function runCleanup() {
+  try {
+    const files = getCleanableFiles();
+    for (const file of files) {
+      try {
+        deleteFile(file.storage_key);
+        hardDeleteFile(file.id);
+      } catch {
+        // best-effort
+      }
+    }
+  } catch {
+    // never block an upload due to cleanup failure
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const customSlug = (formData.get("slug") as string | null)?.trim() || "";
+    const password = (formData.get("password") as string | null)?.trim() || "";
     const expirationDays = parseInt(
       (formData.get("expiration") as string) || "7",
       10
@@ -54,6 +72,24 @@ export async function POST(request: NextRequest) {
       slug = generateSlug();
     }
 
+    // Hash password if provided
+    let passwordHash: string | null = null;
+    if (password) {
+      if (password.length < 4) {
+        return NextResponse.json(
+          { error: "Password must be at least 4 characters" },
+          { status: 400 }
+        );
+      }
+      if (password.length > 128) {
+        return NextResponse.json(
+          { error: "Password must be at most 128 characters" },
+          { status: 400 }
+        );
+      }
+      passwordHash = await bcrypt.hash(password, 10);
+    }
+
     // Store file with UUID key to prevent path traversal
     const ext = file.name.includes(".")
       ? "." + file.name.split(".").pop()
@@ -74,8 +110,12 @@ export async function POST(request: NextRequest) {
       file.type || "application/octet-stream",
       file.size,
       storageKey,
-      expiresAt
+      expiresAt,
+      passwordHash
     );
+
+    // Non-blocking cleanup of expired/downloaded files on each upload
+    setImmediate(runCleanup);
 
     return NextResponse.json({
       slug: record.slug,
@@ -83,6 +123,7 @@ export async function POST(request: NextRequest) {
       originalName: record.original_name,
       size: record.size,
       expiresAt: record.expires_at,
+      hasPassword: !!passwordHash,
     });
   } catch (error) {
     console.error("Upload error:", error);

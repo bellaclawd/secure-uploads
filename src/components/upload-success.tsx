@@ -2,18 +2,20 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Check, Copy, Upload } from "lucide-react";
+import { Check, Copy, Lock, Upload } from "lucide-react";
 import { SITE_URL } from "@/lib/constants";
 
 interface UploadSuccessProps {
   slug: string;
   originalName: string;
+  hasPassword: boolean;
   onReset: () => void;
 }
 
 export function UploadSuccess({
   slug,
   originalName,
+  hasPassword,
   onReset,
 }: UploadSuccessProps) {
   const [copied, setCopied] = useState(false);
@@ -59,6 +61,13 @@ export function UploadSuccess({
           </Button>
         </div>
       </div>
+
+      {hasPassword && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+          <Lock className="inline h-4 w-4 mr-1.5" />
+          This file is password protected. Share the password separately.
+        </div>
+      )}
 
       <p className="text-xs text-muted-foreground">
         This link will expire after the set time or after the first download.

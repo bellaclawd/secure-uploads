@@ -23,6 +23,7 @@ export default async function DownloadPage({ params }: PageProps) {
         mimeType={file.mime_type}
         createdAt={file.created_at}
         expiresAt={file.expires_at}
+        hasPassword={!!file.password_hash}
       />
     </div>
   );

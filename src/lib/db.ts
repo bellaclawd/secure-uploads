@@ -27,11 +27,18 @@ function getDb(): Database.Database {
       expires_at INTEGER NOT NULL,
       created_at INTEGER NOT NULL DEFAULT (unixepoch()),
       downloaded_at INTEGER,
-      deleted_at INTEGER
+      deleted_at INTEGER,
+      password_hash TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_files_slug ON files(slug);
     CREATE INDEX IF NOT EXISTS idx_files_expires_at ON files(expires_at);
   `);
+
+  // Migration: add password_hash column if missing (existing databases)
+  const columns = db.prepare("PRAGMA table_info(files)").all() as Array<{ name: string }>;
+  if (!columns.some((col) => col.name === "password_hash")) {
+    db.exec("ALTER TABLE files ADD COLUMN password_hash TEXT");
+  }
 
   return db;
 }
@@ -47,6 +54,7 @@ export interface FileRecord {
   created_at: number;
   downloaded_at: number | null;
   deleted_at: number | null;
+  password_hash: string | null;
 }
 
 export function insertFile(
@@ -55,14 +63,15 @@ export function insertFile(
   mimeType: string,
   size: number,
   storageKey: string,
-  expiresAt: number
+  expiresAt: number,
+  passwordHash: string | null = null
 ): FileRecord {
   const db = getDb();
   const stmt = db.prepare(`
-    INSERT INTO files (slug, original_name, mime_type, size, storage_key, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO files (slug, original_name, mime_type, size, storage_key, expires_at, password_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  stmt.run(slug, originalName, mimeType, size, storageKey, expiresAt);
+  stmt.run(slug, originalName, mimeType, size, storageKey, expiresAt, passwordHash);
   return getFileBySlug(slug)!;
 }
 

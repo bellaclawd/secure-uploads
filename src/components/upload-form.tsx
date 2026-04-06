@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Upload, File, X } from "lucide-react";
+import { Upload, File, X, Clock } from "lucide-react";
 import { UploadSuccess } from "@/components/upload-success";
 import { formatFileSize } from "@/lib/format";
 import {
@@ -28,6 +28,7 @@ interface UploadResult {
 export function UploadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [slug, setSlug] = useState("");
+  const [password, setPassword] = useState("");
   const [expiration, setExpiration] = useState(7);
   const [state, setState] = useState<UploadState>("idle");
   const [progress, setProgress] = useState(0);
@@ -100,6 +101,7 @@ export function UploadForm() {
     formData.append("file", file);
     formData.append("expiration", expiration.toString());
     if (slug) formData.append("slug", slug);
+    if (password) formData.append("password", password);
 
     const xhr = new XMLHttpRequest();
     xhrRef.current = xhr;
@@ -138,6 +140,7 @@ export function UploadForm() {
   const reset = () => {
     setFile(null);
     setSlug("");
+    setPassword("");
     setExpiration(7);
     setState("idle");
     setProgress(0);
@@ -147,7 +150,7 @@ export function UploadForm() {
   };
 
   if (state === "success" && result) {
-    return <UploadSuccess slug={result.slug} originalName={result.originalName} onReset={reset} />;
+    return <UploadSuccess slug={result.slug} originalName={result.originalName} hasPassword={!!password} onReset={reset} />;
   }
 
   return (
@@ -158,12 +161,12 @@ export function UploadForm() {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onClick={() => !file && fileInputRef.current?.click()}
-        className={`relative flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-colors ${
+        className={`group relative flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all duration-200 ${
           dragOver
-            ? "border-primary bg-primary/5"
+            ? "border-primary bg-primary/5 scale-[1.01]"
             : file
               ? "border-border bg-muted/30"
-              : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30"
+              : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/20"
         }`}
       >
         <input
@@ -197,7 +200,7 @@ export function UploadForm() {
           </div>
         ) : (
           <>
-            <Upload className="mb-3 h-10 w-10 text-muted-foreground/50" />
+            <Upload className="mb-3 h-10 w-10 text-muted-foreground/50 transition-transform duration-200 group-hover:scale-110" />
             <p className="text-base font-medium">
               Drop a file here or click to browse
             </p>
@@ -224,6 +227,7 @@ export function UploadForm() {
                     : "border-border hover:bg-muted"
                 }`}
               >
+                <Clock className="mr-1 h-3.5 w-3.5 inline" />
                 {opt.label}
               </button>
             ))}
@@ -256,6 +260,27 @@ export function UploadForm() {
             underscores only.
           </p>
         </div>
+
+        {/* Password protection */}
+        <div className="space-y-2">
+          <Label htmlFor="password" className="text-sm font-medium">
+            Password protection{" "}
+            <span className="font-normal text-muted-foreground">
+              (optional)
+            </span>
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            placeholder="Set a password for this file"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={state === "uploading"}
+          />
+          <p className="text-xs text-muted-foreground">
+            Recipients will need this password to download the file.
+          </p>
+        </div>
       </div>
 
       {/* Error */}
@@ -268,9 +293,14 @@ export function UploadForm() {
       {/* Progress */}
       {state === "uploading" && (
         <div className="space-y-2">
-          <Progress value={progress} className="h-2" />
+          <div className="flex items-center gap-3">
+            <Progress value={progress} className="flex-1" />
+            <span className="text-sm font-medium tabular-nums text-muted-foreground w-10 text-right">
+              {progress}%
+            </span>
+          </div>
           <p className="text-center text-sm text-muted-foreground">
-            Uploading... {progress}%
+            Uploading...
           </p>
         </div>
       )}
