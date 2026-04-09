@@ -1,11 +1,20 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Upload, File, X, Clock } from "lucide-react";
+import {
+  Clock,
+  File,
+  Link2,
+  LockKeyhole,
+  ShieldCheck,
+  TimerReset,
+  Upload,
+  X,
+} from "lucide-react";
 import { UploadSuccess } from "@/components/upload-success";
 import { formatFileSize } from "@/lib/format";
 import {
@@ -23,6 +32,26 @@ type UploadState = "idle" | "uploading" | "success" | "error";
 interface UploadResult {
   slug: string;
   originalName: string;
+  hasPassword: boolean;
+  expiresAt: number;
+}
+
+const LAST_UPLOAD_KEY = "secureuploads:last-upload";
+
+function readStoredUpload(): UploadResult | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(LAST_UPLOAD_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as UploadResult;
+    if (!parsed?.slug || !parsed?.originalName) return null;
+    return parsed;
+  } catch {
+    window.sessionStorage.removeItem(LAST_UPLOAD_KEY);
+    return null;
+  }
 }
 
 export function UploadForm() {
@@ -36,14 +65,26 @@ export function UploadForm() {
   const [result, setResult] = useState<UploadResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const xhrRef = useRef<XMLHttpRequest | null>(null);
+  const slugPrefix = SITE_URL.replace(/^https?:\/\//, "");
 
-  const handleFile = useCallback((f: File) => {
-    if (f.size > MAX_FILE_SIZE) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const storedUpload = readStoredUpload();
+      if (!storedUpload) return;
+      setResult(storedUpload);
+      setState("success");
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const handleFile = useCallback((nextFile: File) => {
+    if (nextFile.size > MAX_FILE_SIZE) {
       setError(`File too large. Maximum size is ${MAX_FILE_SIZE_LABEL}.`);
       return;
     }
-    setFile(f);
+
+    setFile(nextFile);
     setError("");
   }, []);
 
@@ -51,21 +92,11 @@ export function UploadForm() {
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragOver(false);
-      const f = e.dataTransfer.files[0];
-      if (f) handleFile(f);
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile) handleFile(droppedFile);
     },
     [handleFile]
   );
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-  }, []);
 
   const removeFile = () => {
     setFile(null);
@@ -75,7 +106,6 @@ export function UploadForm() {
   const handleUpload = () => {
     if (!file) return;
 
-    // Validate slug if provided
     if (slug) {
       if (slug.length < SLUG_MIN_LENGTH) {
         setError(`Custom URL must be at least ${SLUG_MIN_LENGTH} characters.`);
@@ -104,7 +134,6 @@ export function UploadForm() {
     if (password) formData.append("password", password);
 
     const xhr = new XMLHttpRequest();
-    xhrRef.current = xhr;
 
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) {
@@ -115,9 +144,24 @@ export function UploadForm() {
     xhr.addEventListener("load", () => {
       try {
         const data = JSON.parse(xhr.responseText);
+
         if (xhr.status >= 200 && xhr.status < 300) {
-          setResult({ slug: data.slug, originalName: data.originalName });
+          const uploadResult: UploadResult = {
+            slug: data.slug,
+            originalName: data.originalName,
+            hasPassword: !!data.hasPassword,
+            expiresAt: data.expiresAt,
+          };
+
+          setResult(uploadResult);
           setState("success");
+
+          if (typeof window !== "undefined") {
+            window.sessionStorage.setItem(
+              LAST_UPLOAD_KEY,
+              JSON.stringify(uploadResult)
+            );
+          }
         } else {
           setError(data.error || "Upload failed.");
           setState("error");
@@ -146,112 +190,158 @@ export function UploadForm() {
     setProgress(0);
     setError("");
     setResult(null);
+
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(LAST_UPLOAD_KEY);
+    }
+
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   if (state === "success" && result) {
-    return <UploadSuccess slug={result.slug} originalName={result.originalName} hasPassword={!!password} onReset={reset} />;
+    return (
+      <UploadSuccess
+        slug={result.slug}
+        originalName={result.originalName}
+        hasPassword={result.hasPassword}
+        expiresAt={result.expiresAt}
+        onReset={reset}
+      />
+    );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Drop zone */}
+    <div className="space-y-7">
       <div
         onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+        }}
         onClick={() => !file && fileInputRef.current?.click()}
-        className={`group relative flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all duration-200 ${
+        onKeyDown={(e) => {
+          if (!file && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={
+          file
+            ? `Selected file ${file.name}. Press tab to reach the remove button.`
+            : "Choose a file to upload"
+        }
+        aria-describedby="upload-dropzone-help"
+        className={`group relative flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-[28px] border border-dashed p-8 text-center transition-all duration-200 ${
           dragOver
-            ? "border-primary bg-primary/5 scale-[1.01]"
+            ? "border-primary bg-primary/6 shadow-[0_20px_60px_-45px_var(--color-primary)]"
             : file
-              ? "border-border bg-muted/30"
-              : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/20"
+              ? "border-primary/25 bg-primary/5"
+              : "border-border/80 bg-card/70 hover:border-primary/45 hover:bg-primary/4"
         }`}
       >
         <input
           ref={fileInputRef}
           type="file"
           className="hidden"
+          aria-label="Choose a file to upload"
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleFile(f);
+            const nextFile = e.target.files?.[0];
+            if (nextFile) handleFile(nextFile);
           }}
         />
 
         {file ? (
-          <div className="flex items-center gap-3">
-            <File className="h-8 w-8 text-muted-foreground" />
-            <div className="text-left">
-              <p className="font-medium">{file.name}</p>
+          <div className="w-full max-w-sm space-y-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <File className="h-7 w-7" />
+            </div>
+            <div className="space-y-1">
+              <p className="break-all text-base font-semibold">{file.name}</p>
               <p className="text-sm text-muted-foreground">
                 {formatFileSize(file.size)}
               </p>
             </div>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 removeFile();
               }}
-              className="ml-2 rounded-full p-1 hover:bg-muted"
+              aria-label="Remove selected file"
+              className="mx-auto inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <X className="h-4 w-4 text-muted-foreground" />
+              <X className="h-4 w-4" />
+              Choose a different file
             </button>
           </div>
         ) : (
           <>
-            <Upload className="mb-3 h-10 w-10 text-muted-foreground/50 transition-transform duration-200 group-hover:scale-110" />
-            <p className="text-base font-medium">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/10 text-primary transition-transform duration-200 group-hover:scale-105">
+              <Upload className="h-8 w-8" />
+            </div>
+            <p className="text-lg font-semibold tracking-tight">
               Drop a file here or click to browse
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Max file size: {MAX_FILE_SIZE_LABEL}
+            <p
+              id="upload-dropzone-help"
+              className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground"
+            >
+              Upload one file per link. Max size: {MAX_FILE_SIZE_LABEL}. For
+              extra protection, add a password below and share it separately.
             </p>
           </>
         )}
       </div>
 
-      {/* Options */}
-      <div className="space-y-4">
-        {/* Expiration */}
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Expires after</Label>
-          <div className="flex gap-2">
-            {EXPIRATION_OPTIONS.map((opt) => (
+      <div className="grid gap-5">
+        <div className="space-y-3">
+          <Label className="text-sm font-semibold">Expires after</Label>
+          <div className="grid grid-cols-3 gap-2">
+            {EXPIRATION_OPTIONS.map((option) => (
               <button
-                key={opt.value}
-                onClick={() => setExpiration(opt.value)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                  expiration === opt.value
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border hover:bg-muted"
+                key={option.value}
+                type="button"
+                onClick={() => setExpiration(option.value)}
+                aria-pressed={expiration === option.value}
+                className={`rounded-2xl border px-3 py-3 text-sm font-medium transition-all ${
+                  expiration === option.value
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                    : "border-border/70 bg-card/70 hover:border-primary/40 hover:bg-primary/4"
                 }`}
               >
                 <Clock className="mr-1 h-3.5 w-3.5 inline" />
-                {opt.label}
+                {option.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Custom slug */}
         <div className="space-y-2">
-          <Label htmlFor="slug" className="text-sm font-medium">
+          <Label htmlFor="slug" className="text-sm font-semibold">
             Custom URL{" "}
             <span className="font-normal text-muted-foreground">
               (optional)
             </span>
           </Label>
-          <div className="flex items-center gap-0 rounded-lg border border-input overflow-hidden focus-within:ring-2 focus-within:ring-ring/50">
-            <span className="bg-muted px-3 py-2 text-sm text-muted-foreground border-r border-input whitespace-nowrap">
+          <div className="flex items-center gap-0 overflow-hidden rounded-2xl border border-input bg-card/70 focus-within:ring-2 focus-within:ring-ring/50">
+            <span className="hidden border-r border-input bg-muted px-3 py-3 text-sm text-muted-foreground sm:inline-block">
               {SITE_URL}/
+            </span>
+            <span className="border-r border-input bg-muted px-3 py-3 text-sm text-muted-foreground sm:hidden">
+              {slugPrefix}/
             </span>
             <Input
               id="slug"
               placeholder="my-secret-file"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              className="border-0 focus-visible:ring-0 shadow-none"
+              className="h-12 border-0 px-3 shadow-none focus-visible:ring-0"
               disabled={state === "uploading"}
             />
           </div>
@@ -261,9 +351,8 @@ export function UploadForm() {
           </p>
         </div>
 
-        {/* Password protection */}
         <div className="space-y-2">
-          <Label htmlFor="password" className="text-sm font-medium">
+          <Label htmlFor="password" className="text-sm font-semibold">
             Password protection{" "}
             <span className="font-normal text-muted-foreground">
               (optional)
@@ -275,44 +364,91 @@ export function UploadForm() {
             placeholder="Set a password for this file"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            className="h-12 rounded-2xl bg-card/70"
             disabled={state === "uploading"}
           />
           <p className="text-xs text-muted-foreground">
-            Recipients will need this password to download the file.
+            Recipients will need this password to download the file. Use at
+            least 4 characters and send it separately from the link.
           </p>
         </div>
       </div>
 
-      {/* Error */}
+      <div className="grid gap-3 rounded-[28px] border border-border/70 bg-card/72 p-4 sm:grid-cols-3">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Link2 className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Controlled sharing</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              The link expires after{" "}
+              {EXPIRATION_OPTIONS.find((option) => option.value === expiration)
+                ?.label ?? "1 week"}{" "}
+              or the first successful download.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <LockKeyhole className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Optional password gate</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {password
+                ? "Recipients will need the password before they can download."
+                : "Anyone with the link can download it. Add a password for sensitive files."}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <TimerReset className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Temporary by default</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              SecureUploads is built for delivery, not permanent storage or
+              account-based file management.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-2xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
           {error}
         </div>
       )}
 
-      {/* Progress */}
       {state === "uploading" && (
-        <div className="space-y-2">
+        <div className="space-y-2 rounded-[28px] border border-border/70 bg-card/72 p-4">
           <div className="flex items-center gap-3">
             <Progress value={progress} className="flex-1" />
-            <span className="text-sm font-medium tabular-nums text-muted-foreground w-10 text-right">
+            <span className="w-10 text-right text-sm font-medium tabular-nums text-muted-foreground">
               {progress}%
             </span>
           </div>
-          <p className="text-center text-sm text-muted-foreground">
-            Uploading...
+          <p className="text-center text-sm text-muted-foreground" aria-live="polite">
+            Uploading and preparing your secure link...
           </p>
         </div>
       )}
 
-      {/* Upload button */}
       <Button
         onClick={handleUpload}
         disabled={!file || state === "uploading"}
-        className="w-full h-12 text-base font-medium"
+        className="h-[3.25rem] w-full rounded-full text-base font-semibold"
         size="lg"
       >
-        {state === "uploading" ? "Uploading..." : "Upload"}
+        <ShieldCheck className="mr-2 h-5 w-5" />
+        {state === "uploading" ? "Uploading..." : "Create secure link"}
       </Button>
     </div>
   );

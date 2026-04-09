@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Image from "next/image";
-import Link from "next/link";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
+import { siteMetadata } from "@/lib/site";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,11 +17,46 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SecureUploads.ca - Temporary File Sharing",
-  description:
-    "Upload files instantly. Get a shareable link. Files auto-delete after expiration.",
+  metadataBase: new URL(siteMetadata.url),
+  title: {
+    default: "SecureUploads.ca | Private, one-time file sharing",
+    template: `%s | ${siteMetadata.name}`,
+  },
+  description: siteMetadata.description,
+  alternates: {
+    canonical: "/",
+  },
+  applicationName: siteMetadata.name,
+  category: "technology",
+  keywords: [
+    "secure file sharing",
+    "one-time download link",
+    "temporary file upload",
+    "password protected file sharing",
+    "private upload",
+  ],
+  openGraph: {
+    title: "SecureUploads.ca | Private, one-time file sharing",
+    description: siteMetadata.description,
+    url: siteMetadata.url,
+    siteName: siteMetadata.name,
+    locale: "en_CA",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SecureUploads.ca | Private, one-time file sharing",
+    description: siteMetadata.description,
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   icons: {
-    icon: "/favicon.png",
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/favicon.ico", type: "image/x-icon" },
+    ],
   },
 };
 
@@ -36,43 +71,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body className="min-h-full bg-background text-foreground">
         <ThemeProvider>
-          <header className="border-b border-border">
-            <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4">
-              <Link href="/" className="flex items-center gap-2">
-                <Image
-                  src="/logo-large.png"
-                  alt="SecureUploads.ca"
-                  width={140}
-                  height={96}
-                  className="h-10 w-auto dark:hidden"
-                  priority
-                />
-                <Image
-                  src="/whitelogo.png"
-                  alt="SecureUploads.ca"
-                  width={140}
-                  height={96}
-                  className="h-10 w-auto hidden dark:block"
-                  priority
-                />
-              </Link>
-              <ThemeToggle />
-            </div>
-          </header>
-          <main className="flex-1">{children}</main>
-          <footer className="border-t border-border py-8 text-sm text-muted-foreground">
-            <div className="mx-auto max-w-3xl px-4 space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <p>&copy; {new Date().getFullYear()} SecureUploads.ca</p>
-                <p>Files are automatically deleted after expiration or first download.</p>
-              </div>
-              <p className="text-center text-xs text-muted-foreground/60">
-                Secure file sharing made in Canada. No tracking, no accounts, no hassle.
-              </p>
-            </div>
-          </footer>
+          <div className="relative isolate flex min-h-full flex-col overflow-hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[32rem] bg-[radial-gradient(circle_at_top_left,_rgba(174,34,52,0.18),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(15,23,42,0.12),_transparent_36%),linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(248,246,242,0.92))] dark:bg-[radial-gradient(circle_at_top_left,_rgba(235,99,117,0.28),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(248,250,252,0.08),_transparent_30%),linear-gradient(180deg,_rgba(17,24,39,1),_rgba(9,12,20,1))]" />
+            <div className="pointer-events-none absolute inset-x-0 top-32 -z-10 h-px bg-gradient-to-r from-transparent via-border/70 to-transparent" />
+            <SiteHeader />
+            <main className="flex-1">{children}</main>
+            <SiteFooter />
+          </div>
         </ThemeProvider>
       </body>
     </html>
