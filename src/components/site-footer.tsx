@@ -27,7 +27,7 @@ export function SiteFooter() {
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
         <div className="space-y-4">
           <Image
-            src="/brand-logo.png"
+            src="/brand-logo-transparent.png"
             alt="SecureUploads.ca"
             width={260}
             height={260}

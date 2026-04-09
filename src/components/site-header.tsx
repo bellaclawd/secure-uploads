@@ -18,7 +18,7 @@ export function SiteHeader() {
         <Link href="/" className="min-w-0">
           <div className="min-w-0">
             <Image
-              src="/brand-logo.png"
+              src="/brand-logo-transparent.png"
               alt="SecureUploads.ca"
               width={280}
               height={280}
